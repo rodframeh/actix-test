@@ -1,32 +1,61 @@
 use actix::prelude::*;
+use std::time::Duration;
 
 #[derive(Message)]
-#[rtype(result = "usize")] // se define el tipo de respuesta de suma
-struct Suma (usize, usize);
-
-// Definicion del actor
-struct Sumador;
-
-impl Actor for Sumador{
-	type Context = Context<Self>;
+#[rtype(result="()")]
+struct Ping{
+	pub id:usize,
 }
 
-// Definimos el Controlador de Mensajes para el mensaje Suma
-impl Handler<Suma> for Sumador{
-	type Result =usize; //tipo de respuesta del mensaje
+//Definicion del Actor
+struct Juego{
+	contador: usize,
+	direccion: Recipient<Ping>,
+}
+
+impl Actor for Juego{
+	type Context= Context <Juego>;
+}
+
+// Controlador para el Ping mensaje
+impl Handler<Ping> for Juego{
+	type Result=();
 	
-	fn handle(&mut self, msg: Suma, ctx: &mut Context<Self>)-> Self::Result{
-		msg.0+msg.1
+	fn handle(&mut self, msg: Ping, ctx: &mut Context<Self>){
+		self.contador+=1;
+		
+		if self.contador>10{
+			System::current().stop();
+		}else{
+			println!("Ping recibido {:?}", msg.id);
+			
+			// esperamos 100 nano segundos
+			ctx.run_later(
+				Duration::new(0,100), move | actor, _ | {
+					actor.direccion.do_send(Ping{id: msg.id+1});
+				}
+			);
+		}
 	}
 }
 
-#[actix_rt::main]// inicia el sistema y se bloquea hasta que se resuelva el future
-async fn main() {
-	let addr = Sumador.start();
-	let res= addr.send(Suma(35,35)).await; // se envia el mensaje y se obtiene el resultado futuro
+fn main(){
+	let system= System::new("test");
 	
-	match res {
-		Ok(resultado)=> println!("SUMA: {}",resultado),
-		_ => println!("La comunicacion con el actor fallo"),
+	let direccion=Juego::create(|ctx|{
+		let direccion=ctx.address();
+	let direccion2= Juego{
+		contador:0,
+		direccion: direccion.recipient(),
+	}.start();
+	
+	direccion2.do_send(Ping {id:10});
+	
+	Juego{
+		contador:0,
+		direccion: direccion2.recipient(),
 	}
+	});
+	
+	system.run();
 }
