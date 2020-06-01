@@ -1,21 +1,32 @@
-use actix::{Actor, Addr, Arbiter, Context, System};
+use actix::prelude::*;
 
-struct MiActor;
+#[derive(Message)]
+#[rtype(result = "usize")] // se define el tipo de respuesta de suma
+struct Suma (usize, usize);
 
-impl Actor for MiActor{
+// Definicion del actor
+struct Sumador;
+
+impl Actor for Sumador{
 	type Context = Context<Self>;
+}
+
+// Definimos el Controlador de Mensajes para el mensaje Suma
+impl Handler<Suma> for Sumador{
+	type Result =usize; //tipo de respuesta del mensaje
 	
-	fn started(&mut self, ctx: &mut Self::Context){
-		println!("Estoy vivo");
-		//System::current().stop();
+	fn handle(&mut self, msg: Suma, ctx: &mut Context<Self>)-> Self::Result{
+		msg.0+msg.1
 	}
 }
 
-
-fn main() {
-    let system = actix::System::new("test");
-
-	let addr=MiActor.start();
-
-    system.run();
+#[actix_rt::main]// inicia el sistema y se bloquea hasta que se resuelva el future
+async fn main() {
+	let addr = Sumador.start();
+	let res= addr.send(Suma(35,35)).await; // se envia el mensaje y se obtiene el resultado futuro
+	
+	match res {
+		Ok(resultado)=> println!("SUMA: {}",resultado),
+		_ => println!("La comunicacion con el actor fallo"),
+	}
 }
